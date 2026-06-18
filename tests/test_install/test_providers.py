@@ -16,6 +16,9 @@ from headroom.providers.codex.install import apply_provider_scope as apply_codex
 from headroom.providers.codex.install import build_install_env as build_codex_install_env
 from headroom.providers.codex.install import revert_provider_scope as revert_codex_provider_scope
 from headroom.providers.copilot.install import build_install_env as build_copilot_install_env
+from headroom.providers.opencode.install import apply_provider_scope as apply_opencode_provider_scope
+from headroom.providers.opencode.install import build_install_env as build_opencode_install_env
+from headroom.providers.opencode.install import revert_provider_scope as revert_opencode_provider_scope
 
 
 def _manifest(tmp_path: Path) -> DeploymentManifest:
@@ -485,6 +488,88 @@ def test_revert_claude_provider_scope_ignores_missing_settings_file(tmp_path: Pa
 
     # Act / Assert
     revert_claude_provider_scope(mutation, manifest)
+
+
+# ---------------------------------------------------------------------------
+# OpenCode provider tests
+# ---------------------------------------------------------------------------
+
+
+def test_opencode_build_install_env_returns_proxy_base_url() -> None:
+    env = build_opencode_install_env(port=5566, backend="ignored")
+    assert env == {"OPENAI_BASE_URL": "http://127.0.0.1:5566/v1"}
+
+
+def test_apply_and_revert_opencode_provider_scope(monkeypatch, tmp_path: Path) -> None:
+    config_path = tmp_path / "opencode.json"
+    config_path.write_text('{"model": "openai/gpt-4o"}')
+    monkeypatch.setattr(
+        "headroom.providers.opencode.install.opencode_config_path", lambda: config_path
+    )
+    manifest = _manifest(tmp_path)
+
+    mutation = apply_opencode_provider_scope(manifest)
+    assert mutation is not None
+    assert mutation.target == "opencode"
+    assert mutation.kind == "json-block"
+
+    content = config_path.read_text()
+    data = json.loads(content)
+    assert data["provider"]["headroom"]["options"]["baseURL"] == "http://127.0.0.1:8787/v1"
+    assert data["model"] == "headroom/claude-sonnet-4-6"
+
+    revert_opencode_provider_scope(mutation, manifest)
+    reverted = json.loads(config_path.read_text())
+    assert reverted["model"] == "openai/gpt-4o"
+    assert "headroom" not in reverted.get("provider", {})
+
+
+def test_apply_opencode_provider_scope_skips_non_provider_scope(
+    monkeypatch, tmp_path: Path
+) -> None:
+    config_path = tmp_path / "opencode.json"
+    monkeypatch.setattr(
+        "headroom.providers.opencode.install.opencode_config_path", lambda: config_path
+    )
+    manifest = _manifest(tmp_path)
+    manifest.scope = "user"
+
+    mutation = apply_opencode_provider_scope(manifest)
+    assert mutation is None
+    assert not config_path.exists()
+
+
+def test_apply_opencode_provider_scope_creates_new_config_when_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
+    config_path = tmp_path / "nested" / "opencode.json"
+    monkeypatch.setattr(
+        "headroom.providers.opencode.install.opencode_config_path", lambda: config_path
+    )
+    manifest = _manifest(tmp_path)
+
+    mutation = apply_opencode_provider_scope(manifest)
+    assert mutation is not None
+    data = json.loads(config_path.read_text())
+    assert data["provider"]["headroom"]["options"]["baseURL"] == "http://127.0.0.1:8787/v1"
+
+
+def test_revert_opencode_provider_scope_ignores_missing_path_and_file(
+    tmp_path: Path,
+) -> None:
+    manifest = _manifest(tmp_path)
+    revert_opencode_provider_scope(
+        ManagedMutation(target="opencode", kind="json-block"),
+        manifest,
+    )
+    revert_opencode_provider_scope(
+        ManagedMutation(
+            target="opencode",
+            kind="json-block",
+            path=str(tmp_path / "missing.json"),
+        ),
+        manifest,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -64,6 +64,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     AIDER_CHAT_VERSION=0.86.2 \
     CODEX_VERSION=0.118.0 \
     OPENCLAW_VERSION=2026.4.7 \
+    OPENCODE_VERSION=1.17.8 \
     PATH="/opt/headroom-venv/bin:/opt/aider-venv/bin:${PATH}" \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -108,7 +109,8 @@ RUN python -m venv /opt/headroom-venv && \
     python -m venv /opt/aider-venv && \
     /opt/aider-venv/bin/python -m pip install --upgrade pip && \
     /opt/aider-venv/bin/python -m pip install "aider-chat==${AIDER_CHAT_VERSION}" && \
-    npm install -g --no-fund --no-audit "@openai/codex@${CODEX_VERSION}" "openclaw@${OPENCLAW_VERSION}"
+    npm install -g --no-fund --no-audit "@openai/codex@${CODEX_VERSION}" "openclaw@${OPENCLAW_VERSION}" && \
+    curl -fsSL https://opencode.ai/install | VERSION="${OPENCODE_VERSION}" bash
 
 COPY e2e/wrap ./e2e/wrap
 
